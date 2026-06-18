@@ -195,9 +195,14 @@ client.on("interactionCreate", async (interaction) => {
     cancelFlags.set(guildId, false);
 
     let dmChannel = null;
+
     if (targetUser) {
       try { dmChannel = await targetUser.createDM(); }
       catch { await interaction.editReply(`❌ Couldn't DM ${targetUser.tag}.`); cancelFlags.delete(guildId); return; }
+    } else if (!interaction.guild) {
+      // Already in a DM context — send to this channel
+      try { dmChannel = interaction.channel ?? await interaction.user.createDM(); }
+      catch { await interaction.editReply("❌ Couldn't open DM channel."); cancelFlags.delete(guildId); return; }
     }
 
     const dest = targetChannel ?? interaction.channel;
