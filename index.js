@@ -199,12 +199,9 @@ client.on("interactionCreate", async (interaction) => {
     if (targetUser) {
       try { dmChannel = await targetUser.createDM(); }
       catch { await interaction.editReply(`❌ Couldn't DM ${targetUser.tag}.`); cancelFlags.delete(guildId); return; }
-    } else if (!interaction.guild) {
-      // Already in a DM context — send to this channel
-      try { dmChannel = interaction.channel ?? await interaction.user.createDM(); }
-      catch { await interaction.editReply("❌ Couldn't open DM channel."); cancelFlags.delete(guildId); return; }
     }
 
+    // In a DM context with no explicit target, send to the current channel directly
     const dest = targetChannel ?? interaction.channel;
     const sent = await runSend({ dest, dmChannel, messages, count, guildId });
     cancelFlags.delete(guildId);
