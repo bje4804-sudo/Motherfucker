@@ -124,13 +124,19 @@ client.once("ready", async () => {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 async function runSend({ dest, dmChannel, messages, count, guildId }) {
   let sent = 0;
+  let consecutive_fails = 0;
   for (let i = 0; i < count; i++) {
     if (cancelFlags.get(guildId)) break;
     try {
       if (dmChannel) await dmChannel.send(pick(messages));
       else await dest.send(pick(messages));
       sent++;
-    } catch { break; }
+      consecutive_fails = 0;
+    } catch (err) {
+      consecutive_fails++;
+      console.error('Send error:', err?.message);
+      if (consecutive_fails >= 5) break; // only stop after 5 consecutive failures
+    }
   }
   return sent;
 }
@@ -195,14 +201,21 @@ client.on("interactionCreate", async (interaction) => {
     cancelFlags.set(guildId, false);
 
     let dmChannel = null;
+    let dest = null;
 
     if (targetUser) {
       try { dmChannel = await targetUser.createDM(); }
       catch { await interaction.editReply(`❌ Couldn't DM ${targetUser.tag}.`); cancelFlags.delete(guildId); return; }
+    } else if (targetChannel) {
+      dest = targetChannel;
+    } else if (interaction.channel) {
+      dest = interaction.channel;
+    } else {
+      await interaction.editReply("❌ Specify a **user** to DM using the `user` option.");
+      cancelFlags.delete(guildId);
+      return;
     }
 
-    // In a DM context with no explicit target, send to the current channel directly
-    const dest = targetChannel ?? interaction.channel;
     const sent = await runSend({ dest, dmChannel, messages, count, guildId });
     cancelFlags.delete(guildId);
     await interaction.editReply(`✅ Sent **${sent}** message(s).${sent < count ? " *(cancelled)*" : ""}`);
