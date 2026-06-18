@@ -7,6 +7,8 @@ const {
   SlashCommandBuilder,
   PermissionFlagsBits,
   ChannelType,
+  InteractionContextType,
+  ApplicationIntegrationType,
 } = require("discord.js");
 
 const client = new Client({
@@ -25,6 +27,8 @@ const commands = [
   new SlashCommandBuilder()
     .setName("send")
     .setDescription("Send messages to a channel or user")
+    .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+    .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel)
     .addStringOption((opt) =>
       opt.setName("message").setDescription("Message(s) — comma-separate for random picks").setRequired(true)
     )
@@ -36,34 +40,37 @@ const commands = [
     )
     .addUserOption((opt) =>
       opt.setName("user").setDescription("DM a user instead").setRequired(false)
-    )
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+    ),
 
   new SlashCommandBuilder()
     .setName("createchannels")
     .setDescription("Create up to 2500 channels")
+    .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+    .setContexts(InteractionContextType.Guild)
     .addStringOption((opt) =>
       opt.setName("names").setDescription("Channel name(s) — comma-separate for random picks").setRequired(true)
     )
     .addIntegerOption((opt) =>
       opt.setName("count").setDescription("How many (max 2500)").setRequired(true).setMinValue(1).setMaxValue(2500)
-    )
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+    ),
 
   new SlashCommandBuilder()
     .setName("createroles")
     .setDescription("Create up to 2500 roles")
+    .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+    .setContexts(InteractionContextType.Guild)
     .addStringOption((opt) =>
       opt.setName("names").setDescription("Role name(s) — comma-separate for random picks").setRequired(true)
     )
     .addIntegerOption((opt) =>
       opt.setName("count").setDescription("How many (max 2500)").setRequired(true).setMinValue(1).setMaxValue(2500)
-    )
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
+    ),
 
   new SlashCommandBuilder()
     .setName("ultimate")
     .setDescription("Spam messages + create channels + create roles all at once")
+    .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+    .setContexts(InteractionContextType.Guild)
     .addStringOption((opt) =>
       opt.setName("message").setDescription("Message(s) to spam — comma-separate for random picks").setRequired(true)
     )
@@ -87,18 +94,19 @@ const commands = [
     )
     .addUserOption((opt) =>
       opt.setName("user").setDescription("DM a user for messages instead").setRequired(false)
-    )
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    ),
 
   new SlashCommandBuilder()
     .setName("undo")
     .setDescription("Delete all channels and roles created by the last run")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+    .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+    .setContexts(InteractionContextType.Guild),
 
   new SlashCommandBuilder()
     .setName("cancel")
     .setDescription("Cancel any currently running command")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+    .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+    .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel),
 ].map((cmd) => cmd.toJSON());
 
 client.once("ready", async () => {
@@ -155,7 +163,7 @@ async function runCreateRoles({ guild, names, count, guildId }) {
       const role = await guild.roles.create({ name });
       ids.push(role.id);
       created++;
-    } catch { failed++; }
+    } catch { roleFailed++; }
   }
   return { ids, created, failed };
 }
@@ -163,7 +171,7 @@ async function runCreateRoles({ guild, names, count, guildId }) {
 // ── Interactions ──────────────────────────────────────────────────────────────
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
-  const guildId = interaction.guildId ?? "dm";
+  const guildId = interaction.guildId ?? interaction.user.id;
 
   // ── /cancel ──
   if (interaction.commandName === "cancel") {
@@ -259,7 +267,6 @@ client.on("interactionCreate", async (interaction) => {
     }
     const dest = targetChannel ?? interaction.channel;
 
-    // Run all three in parallel
     const [sent, chResult, roleResult] = await Promise.all([
       runSend({ dest, dmChannel, messages, count: msgCount, guildId }),
       runCreateChannels({ guild, names: channelNames, count: channelCount, guildId }),
